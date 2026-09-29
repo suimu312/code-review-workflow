@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code Review Workflow · 可视化编排</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Microsoft YaHei", system-ui, sans-serif; background: #f5f6f8; color: #1f2329; }
+  header { background: #fff; padding: 18px 32px; border-bottom: 1px solid #e5e6eb; }
+  header h1 { font-size: 20px; font-weight: 600; }
+  header p { font-size: 13px; color: #7a8086; margin-top: 4px; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 28px 32px 48px; }
+
+  .input-bar { display: flex; gap: 10px; margin-bottom: 28px; }
+  .input-bar input { flex: 1; padding: 12px 16px; border: 1px solid #dcdfe4; border-radius: 8px; font-size: 14px; }
+  .input-bar button { padding: 12px 28px; background: #2563eb; color: #fff; border: 0; border-radius: 8px; font-size: 14px; cursor: pointer; }
+  .input-bar button:disabled { background: #a5b4fc; cursor: not-allowed; }
+
+  /* 流程图区域 */
+  .flow { display: flex; align-items: flex-start; justify-content: center; gap: 12px; background: #fff; border: 1px solid #e5e6eb; border-radius: 12px; padding: 32px 20px; }
+  .node { width: 210px; text-align: center; }
+  .node-card { background: #f2f3f5; border: 2px solid #dcdfe4; border-radius: 10px; padding: 16px 10px; min-height: 120px; transition: all .3s; }
+  .node-card .icon { font-size: 26px; font-weight: 600; color: #2563eb; }
+  .node-card .name { font-weight: 600; margin-top: 8px; font-size: 14px; }
+  .node-card .state { font-size: 12px; color: #7a8086; margin-top: 6px; min-height: 18px; }
+  .node-card.running { background: #eff6ff; border-color: #2563eb; box-shadow: 0 0 0 4px rgba(37,99,235,.1); }
+  .node-card.running .state { color: #2563eb; animation: pulse 1s infinite; }
+  .node-card.done { background: #f0fdf4; border-color: #16a34a; }
+  .node-card.done .state { color: #16a34a; }
+  .node-card.failed { background: #fef2f2; border-color: #dc2626; }
+  .node-card.failed .state { color: #dc2626; }
+  .node-card.skipped { background: #f8fafc; border-color: #94a3b8; opacity: .6; }
+  .node-card.skipped .state { color: #94a3b8; }
+  @keyframes pulse { 50% { opacity: .45; } }
+  .sub { font-size: 11px; color: #7a8086; margin-top: 6px; }
+  .sub .tag { display: inline-block; background: #eef0f2; border-radius: 4px; padding: 2px 6px; margin: 2px; }
+  .arrow { align-self: center; font-size: 24px; color: #9ca3af; margin-top: 48px; }
+  .branch-note { margin-top: 14px; font-size: 12px; color: #7a8086; text-align: center; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:6px; padding:6px; }
+
+  /* 日志区 */
+  .log-wrap { margin-top: 24px; background: #0f172a; border-radius: 12px; padding: 18px 20px; }
+  .log-wrap h3 { color: #94a3b8; font-size: 13px; margin-bottom: 12px; }
+  #log { max-height: 320px; overflow-y: auto; font-family: Consolas, monospace; font-size: 12px; color: #e2e8f0; line-height: 1.7; }
+  .log-line { padding: 2px 0; border-bottom: 1px solid rgba(148,163,184,.08); }
+  .log-line .t { color: #64748b; margin-right: 8px; }
+  .log-line .badge { display: inline-block; padding: 1px 8px; border-radius: 4px; font-size: 11px; margin-right: 6px; }
+  .badge.start { background:#334155; }
+  .badge.node { background:#2563eb; }
+  .badge.done { background:#16a34a; }
+  .badge.skip { background:#f59e0b; }
+  .badge.fail { background:#dc2626; }
+  .badge.branch { background:#7c3aed; }
+  .result { margin-top: 24px; background:#fff; border:1px solid #e5e6eb; border-radius:12px; padding:20px 24px; display:none; }
+  .result h3 { font-size:14px; margin-bottom:10px; }
+  .result pre { background:#f8fafc; border-radius:8px; padding:12px; font-size:12px; white-space:pre-wrap; word-break:break-all; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Code Review Workflow · 可视化编排界面</h1>
+  <p>编码Agent → 审查Agent（并行子任务） → 修复Agent（条件分支） · 执行日志与状态实时追踪</p>
+</header>
+
+<div class="wrap">
+  <div class="input-bar">
+    <input id="req" placeholder="输入需求，例如：写一个函数，输入数字列表返回平均值和最大值">
+    <button id="runBtn" onclick="startWorkflow()">运行工作流</button>
+  </div>
+
+  <!-- 流程图 -->
+  <div class="flow">
+    <div class="node">
+      <div class="node-card" id="node-coder">
+        <div class="icon">编码</div>
+        <div class="name">编码Agent</div>
+        <div class="state" id="st-coder">待机</div>
+      </div>
+      <div class="sub">根据需求生成代码</div>
+    </div>
+
+    <div class="arrow">➜</div>
+
+    <div class="node">
+      <div class="node-card" id="node-reviewer">
+        <div class="icon">审查</div>
+        <div class="name">审查Agent</div>
+        <div class="state" id="st-reviewer">待机</div>
+      </div>
+      <div class="sub">
+        <span class="tag">规则检查</span>
+        <span class="tag">LLM审查</span>
+      </div>
+      <div class="sub" style="font-size:10px">两个子任务并行执行</div>
+    </div>
+
+    <div class="arrow">➜</div>
+
+    <div class="node">
+      <div class="node-card" id="node-fixer">
+        <div class="icon">修复</div>
+        <div class="name">修复Agent</div>
+        <div class="state" id="st-fixer">待机</div>
+      </div>
+      <div class="sub">循环自检修复代码</div>
+      <div class="branch-note" id="branchNote">条件分支：有 Bug 才执行，无 Bug 跳过</div>
+    </div>
+  </div>
+
+  <!-- 日志 -->
+  <div class="log-wrap">
+    <h3>执行日志（实时状态追踪）</h3>
+    <div id="log"></div>
+  </div>
+
+  <!-- 结果 -->
+  <div class="result" id="result">
+    <h3>最终共享状态</h3>
+    <pre id="resultBody"></pre>
+  </div>
+</div>
+
+<script>
+const states = { coder:"st-coder", reviewer:"st-reviewer", fixer:"st-fixer" };
+const cards = { coder:"node-coder", reviewer:"node-reviewer", fixer:"node-fixer" };
+const agentNames = { "编码Agent":"coder", "审查Agent":"reviewer", "修复Agent":"fixer" };
+
+function setNode(key, status, text){
+  const card = document.getElementById(cards[key]);
+  const st = document.getElementById(states[key]);
+  card.className = "node-card " + status;
+  st.textContent = text;
+}
+function addLog(badge, text){
+  const log = document.getElementById("log");
+  const d = new Date();
+  const t = d.getHours().toString().padStart(2,"0")+":"+d.getMinutes().toString().padStart(2,"0")+":"+d.getSeconds().toString().padStart(2,"0");
+  const line = document.createElement("div");
+  line.className = "log-line";
+  line.innerHTML = '<span class="t">'+t+'</span><span class="badge '+badge+'">'+badge+'</span>'+text;
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+}
+
+function resetUI(){
+  setNode("coder","","待机");
+  setNode("reviewer","","待机");
+  setNode("fixer","","待机");
+  document.getElementById("log").innerHTML = "";
+  document.getElementById("result").style.display = "none";
+  document.getElementById("branchNote").textContent = "条件分支：有 Bug 才执行，无 Bug 跳过";
+}
+
+async function startWorkflow(){
+  const input = document.getElementById("req").value.trim();
+  if(!input){ alert("请输入需求"); return; }
+  resetUI();
+  document.getElementById("runBtn").disabled = true;
+
+  // 连接 SSE
+  const es = new EventSource("/events");
+  es.onmessage = (e) => {
+    const evt = JSON.parse(e.data);
+    handleEvent(evt);
+    if(evt.type === "workflow_done" || evt.type === "workflow_failed"){
+      es.close();
+      document.getElementById("runBtn").disabled = false;
+    }
+  };
+
+  await fetch("/run", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({ input })
+  });
+}
+
+function handleEvent(evt){
+  const key = agentNames[evt.agent];
+  switch(evt.type){
+    case "workflow_start":
+      addLog("start", "工作流启动");
+      break;
+    case "node_start":
+      addLog("node", evt.agent + " 开始执行");
+      if(key) setNode(key,"running","运行中…");
+      break;
+    case "node_done":
+      addLog("done", evt.agent + " 完成");
+      if(key) setNode(key,"done","完成");
+      break;
+    case "node_retry":
+      addLog("fail", evt.agent + " 失败，自动重试：" + evt.message);
+      break;
+    case "node_failed":
+      addLog("fail", evt.agent + " 执行失败：" + evt.message);
+      if(key) setNode(key,"failed","失败");
+      break;
+    case "branch_yes":
+      addLog("branch", "条件分支判定：审查发现问题，进入修复节点");
+      document.getElementById("branchNote").textContent = "✓ 有 Bug，执行修复节点";
+      break;
+    case "branch_no":
+      addLog("skip", "条件分支判定：审查通过，跳过修复节点");
+      if(key) setNode("fixer","skipped","跳过（无 Bug）");
+      document.getElementById("branchNote").textContent = "✓ 无 Bug，跳过修复节点";
+      break;
+    case "workflow_done":
+      addLog("done", "工作流结束");
+      document.getElementById("resultBody").textContent = evt.summary || "完成";
+      document.getElementById("result").style.display = "block";
+      break;
+    case "workflow_failed":
+      addLog("fail", "工作流失败：" + (evt.message || ""));
+      break;
+  }
+}
+</script>
+</body>
+</html>

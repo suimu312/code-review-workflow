@@ -49,4 +49,12 @@ class WorkflowContext:
         }
 
     def summary(self) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
+        # 精简摘要：只展示代码与审查的核心内容，避免过长
+        parts = [f"需求: {self.input}"]
+        if self.generated_code:
+            parts.append(f"编码Agent产物(前300字):\n{self.generated_code[:300]}")
+        if self.review_result:
+            parts.append(f"审查Agent意见(前300字):\n{self.review_result[:300]}")
+        if self.fixed_code:
+            parts.append(f"修复Agent产物(前300字):\n{self.fixed_code[:300]}")
+        return "\n\n".join(parts)

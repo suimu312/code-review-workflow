@@ -9,17 +9,36 @@
 
 - **3 个 Agent 协作**：编码Agent → 审查Agent → 修复Agent，接力完成"需求→代码→审查→修复"完整流程
 - **消息传递与状态共享**：所有 Agent 通过共享的 `WorkflowContext` 传递数据
-- **顺序流程控制**：Workflow 引擎按注册顺序依次执行节点
-- **错误处理**：单个 Agent 失败会被捕获记录，不影响整个流程
-- **执行日志与状态追踪**：完整记录每个节点的执行状态
+- **高级流程控制**：顺序执行、条件分支（有 Bug 才修复）、并行执行（审查阶段并行跑规则检查+LLM审查）、循环自检（修复Agent 内部循环）
+- **可视化编排界面**：Web 界面实时展示节点状态流转 + 执行日志（SSE 实时推送）
+- **执行日志与状态追踪**：完整记录每个节点执行状态
+- **错误处理与恢复**：节点失败自动重试一次，失败不拖垮整个流程
 - **复用项目1**：LLM 客户端、对话记忆直接复用于项目1
+
+## 两种运行方式
+
+### 方式 A：可视化界面（推荐）
+
+```bash
+pip install -r requirements.txt
+python webapp.py
+```
+
+浏览器打开 **http://127.0.0.1:5000**，输入需求点"运行工作流"，
+即可看到三个 Agent 的节点状态实时流转和日志。
+
+### 方式 B：命令行
+
+```bash
+python main.py
+```
 
 ## 快速开始
 
 ### 1. 安装依赖
 
 ```bash
-pip install openai
+pip install openai flask
 ```
 
 ### 2. 配置 API Key
@@ -29,10 +48,11 @@ cp .env.example .env
 # 编辑 .env，填入你的 API Key（同项目1）
 ```
 
-### 3. 运行
+### 3. 运行（任选一种方式）
 
 ```bash
-python main.py
+python webapp.py   # 可视化界面，浏览器打开 http://127.0.0.1:5000
+python main.py     # 命令行
 ```
 
 ### 4. 示例
@@ -60,6 +80,9 @@ def average(nums):
 ```
 code-review-workflow/
 ├── main.py                    # CLI 入口
+├── webapp.py                  # 可视化服务（Flask + SSE）
+├── templates/
+│   └── index.html             # 可视化编排界面
 ├── requirements.txt           # Python 依赖
 ├── .env.example               # 环境变量模板
 ├── README.md                  # 本文件
@@ -72,7 +95,7 @@ code-review-workflow/
 │   ├── __init__.py
 │   ├── context.py             # 共享状态容器
 │   ├── agent_base.py          # Agent 基类
-│   └── engine.py              # 顺序编排引擎
+│   └── engine.py              # 编排引擎（流程控制/并行/分支/错误恢复）
 └── agents/
     ├── __init__.py
     └── workflow_agents.py     # 编码/审查/修复 三个 Agent
