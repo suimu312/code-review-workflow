@@ -3,6 +3,8 @@
 一个由 **3 个 Agent 协作完成**代码开发 + 审查 + 修复的 Simple Workflow MVP。
 承接项目1（Code Review Agent），将单个 Agent 升级为多 Agent 协作流水线。
 
+**代码仓库**：[https://github.com/suimu312/code-review-workflow](https://github.com/suimu312/code-review-workflow)
+
 ## 功能特性
 
 - **3 个 Agent 协作**：编码Agent → 审查Agent → 修复Agent，接力完成"需求→代码→审查→修复"完整流程
